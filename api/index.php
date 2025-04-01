@@ -8,8 +8,11 @@ if (empty($url)) {
     die('Invalid URL - Usage: /api/[stream_url]');
 }
 
-// URL decode only once (Vercel may encode slashes)
+// Fix common URL encoding issues
 $url = urldecode($url);
+
+// Fix double slashes that might occur after /api/https:/ (becomes https://)
+$url = preg_replace('/(https?):\/([^\/])/', '$1://$2', $url);
 
 // Validate URL format
 if (!filter_var($url, FILTER_VALIDATE_URL)) {
@@ -20,7 +23,7 @@ if (!filter_var($url, FILTER_VALIDATE_URL)) {
     
     if (!filter_var($url, FILTER_VALIDATE_URL)) {
         header('HTTP/1.1 400 Bad Request');
-        die('Invalid URL format');
+        die('Invalid URL format: ' . htmlspecialchars($url));
     }
 }
 
@@ -43,7 +46,7 @@ $response = @file_get_contents($url, false, $context);
 
 if ($response === false) {
     header('HTTP/1.1 502 Bad Gateway');
-    die('Failed to fetch stream');
+    die('Failed to fetch stream from: ' . htmlspecialchars($url));
 }
 
 // Forward content type
@@ -55,8 +58,8 @@ foreach ($http_response_header as $header) {
 }
 
 // Process HLS playlists
-if (strpos($header, 'application/vnd.apple.mpegurl') !== false || 
-    strpos($header, 'application/x-mpegURL') !== false) {
+if (isset($header) && (strpos($header, 'application/vnd.apple.mpegurl') !== false || 
+    strpos($header, 'application/x-mpegURL') !== false)) {
     
     $proxyBase = 'https://'.$_SERVER['HTTP_HOST'].'/api/';
     $lines = explode("\n", $response);
